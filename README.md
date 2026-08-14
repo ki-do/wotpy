@@ -101,3 +101,9 @@ task: [docker-tests] echo "✅ Tests for Python 3.10 completed successfully"
 ```
 
 An MQTT broker is needed as a dependency for the MQTT binding tests. The task will automatically create a new container based on the [eclipse-mosquitto image](https://hub.docker.com/_/eclipse-mosquitto) and expose the broker port to the host. The `WOTPY_TESTS_MQTT_BROKER_URL` environment variable will be set to the broker URL.
+
+Demo ramp-up:
+
+podman stop zenoh-router 2>/dev/null; podman run --rm -d --network host --name zenoh-router eclipse/zenoh:1.9.0
+python examples/zenoh-hello-world/server.py --router tcp/localhost:7447
+python examples/zenoh-hello-world/client.py --router tcp/localhost:7447

@@ -1,0 +1,75 @@
+{
+    "@context": [
+        "https://www.w3.org/2019/wot/td/v1",
+        "https://www.w3.org/2022/wot/td/v1.1"
+    ],
+    "id": "urn:hello-world-zenoh",
+    "title": "HelloWorldZenoh",
+    "description": "A simple Hello-World Thing exposed over Zenoh. Replace <router> with your Zenoh router address (e.g. localhost:7447) and <servient_id> with the value printed by the server on startup (default: wotpy).",
+    "securityDefinitions": {
+        "nosec_sc": { "scheme": "nosec" }
+    },
+    "security": "nosec_sc",
+    "properties": {
+        "message": {
+            "title": "Message",
+            "description": "A greeting message that can be read, written and observed",
+            "type": "string",
+            "observable": true,
+            "forms": [
+                {
+                    "href": "zenoh://tcp/<router>:7447/<servient_id>/property/requests/helloworldzenoh/message",
+                    "contentType": "application/json",
+                    "op": "readproperty"
+                },
+                {
+                    "href": "zenoh://tcp/<router>:7447/<servient_id>/property/requests/helloworldzenoh/message",
+                    "contentType": "application/json",
+                    "op": "writeproperty"
+                },
+                {
+                    "href": "zenoh://tcp/<router>:7447/<servient_id>/property/updates/helloworldzenoh/message",
+                    "contentType": "application/json",
+                    "op": "observeproperty"
+                }
+            ]
+        }
+    },
+    "actions": {
+        "greeting": {
+            "title": "Greeting",
+            "description": "Returns a personalised greeting for the given name",
+            "input": {
+                "type": "string",
+                "description": "Name of the person to greet"
+            },
+            "output": {
+                "type": "string",
+                "description": "Personalised greeting string"
+            },
+            "forms": [
+                {
+                    "href": "zenoh://tcp/<router>:7447/<servient_id>/action/requests/helloworldzenoh/greeting",
+                    "contentType": "application/json",
+                    "op": "invokeaction"
+                }
+            ]
+        }
+    },
+    "events": {
+        "newMessage": {
+            "title": "New Message",
+            "description": "Fired whenever the 'message' property is updated",
+            "data": {
+                "type": "string"
+            },
+            "forms": [
+                {
+                    "href": "zenoh://tcp/<router>:7447/<servient_id>/event/updates/helloworldzenoh/newMessage",
+                    "contentType": "application/json",
+                    "op": "subscribeevent"
+                }
+            ]
+        }
+    }
+}
