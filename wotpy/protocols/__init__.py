@@ -31,6 +31,7 @@ Implementations of the supported Protocol Binding templates.
 
     coap
     http
+    modbus
     mqtt
     ws
     zenoh

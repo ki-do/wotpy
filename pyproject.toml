@@ -37,6 +37,7 @@ dependencies = [
   "requests-oauthlib>=2.0.0",
   "aiocoap[linkheader,oscore]>=0.4.7 ; platform_system != 'Darwin'",
   "amqtt>=0.10.1",
+  "pymodbus>=3.7.0",
   "eclipse-zenoh>=1.5.0",
   "websockets>=15.0.1"
 ]

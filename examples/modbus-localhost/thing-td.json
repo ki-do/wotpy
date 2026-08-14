@@ -1,0 +1,284 @@
+{
+  "@context": [
+    "https://www.w3.org/2019/wot/td/v1"
+  ],
+  "@type": [
+    "Thing"
+  ],
+  "id": "urn:PowerMeterTCP",
+  "title": "HotelRoom PowerMeter TCP",
+  "base": "modbus://0.0.0.0:1502",
+  "securityDefinitions": {
+    "nosec_sc": {
+      "scheme": "nosec"
+    }
+  },
+  "security": "nosec_sc",
+  "properties": {
+    "write_property": {
+      "title": "write_property",
+      "type": "string",
+      "const": 200,
+      "forms": [
+        {
+          "href": "/",
+          "op": [
+            "writeproperty",
+            "readproperty"
+          ],
+          "modbus:unitID": 1,
+          "modbus:address": 290,
+          "modbus:quantity": 4,
+          "modbus:type": "integer",
+          "modbus:entity": "holdingregister"
+        }
+      ]
+    },
+    "battery_charge_in_percent": {
+      "title": "battery_charge_in_percent",
+      "type": "string",
+      "const": 100,
+      "forms": [
+        {
+          "href": "/",
+          "op": [
+            "observeproperty",
+            "unobserveproperty",
+            "readproperty"
+          ],
+          "modbus:unitID": 1,
+          "modbus:address": 190,
+          "modbus:quantity": 4,
+          "modbus:type": "integer",
+          "modbus:entity": "holdingregister"
+        }
+      ]
+    },
+    "integer_property": {
+      "title": "integer_property",
+      "type": "integer",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "integer",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 0,
+          "modbus:quantity": 4
+        }
+      ]
+    },
+    "int_property": {
+      "title": "uptime_seconds",
+      "type": "integer",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "int",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 2,
+          "modbus:quantity": 2
+        }
+      ]
+    },
+    "byte_property": {
+      "title": "byte_property",
+      "type": "integer",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "byte",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 4,
+          "modbus:quantity": 1
+        }
+      ]
+    },
+    "unsignedShort_property": {
+      "title": "unsignedShort_property",
+      "type": "integer",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "unsignedShort",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 5,
+          "modbus:quantity": 1
+        }
+      ]
+    },
+    "unsignedInt_property": {
+      "title": "unsignedInt_property",
+      "type": "integer",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "unsignedInt",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 6,
+          "modbus:quantity": 2
+        }
+      ]
+    },
+    "unsignedLong_property": {
+      "title": "unsignedLong_property",
+      "type": "integer",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "unsignedLong",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 8,
+          "modbus:quantity": 4
+        }
+      ]
+    },
+    "unsignedByte_property": {
+      "title": "unsignedByte_property",
+      "type": "integer",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "unsignedByte",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 12,
+          "modbus:quantity": 1
+        }
+      ]
+    },
+    "long_property": {
+      "title": "long_property",
+      "type": "integer",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "long",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 13,
+          "modbus:quantity": 4
+        }
+      ]
+    },
+    "short_property": {
+      "title": "short_property",
+      "type": "integer",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "short",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 17,
+          "modbus:quantity": 1
+        }
+      ]
+    },
+    "light_bulb_power_in_ampere": {
+      "title": "double_property",
+      "type": "number",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "double",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 18,
+          "modbus:quantity": 4
+        }
+      ]
+    },
+    "grid_voltage": {
+      "title": "float_property",
+      "type": "number",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "float",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 22,
+          "modbus:quantity": 2
+        }
+      ]
+    },
+    "hexBinary_property": {
+      "title": "hexBinary_property",
+      "type": "string",
+      "const": "2025-08-19 15:51:46 UTC",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "hexBinary",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 24,
+          "modbus:quantity": 12
+        }
+      ]
+    },
+    "string_property": {
+      "title": "string_property",
+      "type": "string",
+      "const": "OneConnectivity!",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:type": "string",
+          "modbus:entity": "holdingregister",
+          "modbus:unitID": 1,
+          "modbus:address": 36,
+          "modbus:quantity": 8
+        }
+      ]
+    },
+    "decimal_property": {
+      "title": "boolean_property",
+      "type": "number",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:unitID": 1,
+          "modbus:type": "decimal",
+          "modbus:entity": "holdingregister",
+          "modbus:address": 44,
+          "modbus:quantity": 4
+        }
+      ]
+    },
+    "boolean_property": {
+      "title": "boolean_property",
+      "type": "boolean",
+      "forms": [
+        {
+          "href": "/",
+          "op": "readproperty",
+          "modbus:unitID": 1,
+          "modbus:address": 48,
+          "modbus:type": "boolean",
+          "modbus:entity": "coil"
+        }
+      ]
+    }
+  }
+}

@@ -30,9 +30,11 @@ Functions to check if some functionalities are enabled in the current platform.
 import logging
 import platform
 import sys
+import importlib.util
 
 FEATURE_COAP = "COAP"
 FEATURE_MQTT = "MQTT"
+FEATURE_MODBUS = "MODBUS"
 
 FEATURE_REQUISITES = {
     FEATURE_COAP: {
@@ -106,3 +108,18 @@ def is_mqtt_supported():
     """Returns True if the MQTT binding is supported in this platform."""
 
     return is_supported(FEATURE_MQTT)
+
+
+def is_modbus_supported():
+    """Returns True if the Modbus binding is supported in this platform.
+
+    Besides runtime platform checks, Modbus also requires the optional
+    pymodbus dependency to be installed.
+    """
+
+    try:
+        dep_ok = importlib.util.find_spec("pymodbus") is not None
+    except Exception:
+        dep_ok = False
+
+    return dep_ok

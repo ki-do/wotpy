@@ -37,7 +37,7 @@ from wotpy.protocols.enums import Protocols
 from wotpy.protocols.http.client import HTTPClient
 from wotpy.protocols.ws.client import WebsocketClient
 from wotpy.protocols.zenoh.client import ZenohClient
-from wotpy.support import (is_coap_supported, is_mqtt_supported)
+from wotpy.support import (is_coap_supported, is_mqtt_supported, is_modbus_supported)
 from wotpy.utils.utils import get_main_ipv4_address
 from wotpy.wot.enums import InteractionTypes
 from wotpy.wot.exposed.thing_set import ExposedThingSet
@@ -311,6 +311,13 @@ class Servient:
 
             self._clients.update(
                 {Protocols.MQTT: MQTTClient(**conf.get(Protocols.MQTT, {}))}
+            )
+
+        if is_modbus_supported():
+            from wotpy.protocols.modbus.client import ModbusClient
+
+            self._clients.update(
+                {Protocols.MODBUS: ModbusClient(**conf.get(Protocols.MODBUS, {}))}
             )
 
     def _build_td_catalogue_app(self):
