@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-# SPDX-License-Identifier: MIT
 
 """
 Consume a Modbus Thing from a TD file.
@@ -24,8 +21,6 @@ import struct
 import sys
 from urllib.parse import parse_qs, urlsplit
 
-# Allow running this script directly from the examples/ directory even when
-# wotpy is not installed as a package: add the repo root to sys.path.
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
@@ -44,7 +39,6 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_TD_PATH = os.path.join(os.path.dirname(__file__), "sentron4220.tm.jsonld")
 
-# Map common lower-case entity names to the current ModbusEntity enum values.
 ENTITY_MAP = {
     "coil": "Coil",
     "discreteinput": "DiscreteInput",
@@ -105,8 +99,6 @@ def _extract_address_quantity(form):
 
 
 def _normalize_thing_model_fields(td_doc):
-    # wot.consume() expects a Thing Description, while sentron4220.tm.jsonld is a Thing Model.
-    # Remove ThingModel marker and ensure version.instance exists.
     type_val = td_doc.get("@type")
     if isinstance(type_val, str):
         if type_val == "tm:ThingModel":
@@ -147,7 +139,6 @@ def _normalize_modbus_form(form, host, port, default_unit_id):
     host_uri = _format_host_for_uri(host)
     form["href"] = f"modbus+tcp://{host_uri}:{port}/{int(unit_id)}/{int(address)}?quantity={int(quantity)}"
 
-    # Keep both key styles so this TD remains interoperable across consumers.
     form["modv:unitID"] = int(unit_id)
     form["modv:address"] = int(address)
     form["modv:quantity"] = int(quantity)
@@ -169,8 +160,6 @@ def build_runtime_td(td_doc, host, port):
 
 
 def _decode_modbus_value(raw_value):
-    # For PAC4220 values exposed as xsd:hexBinary, many measurements are float32
-    # encoded as two 16-bit registers in big-endian word order.
     if isinstance(raw_value, list) and len(raw_value) == 2 and all(isinstance(item, int) for item in raw_value):
         try:
             binary = raw_value[0].to_bytes(2, "big") + raw_value[1].to_bytes(2, "big")
@@ -220,10 +209,9 @@ async def _run_interactions(
     wot = await servient.start()
     consumed_thing = wot.consume(json.dumps(td_runtime))
 
-    # Keep compatibility with the old demo TD if it contains a writable test property.
     if "write_property" in consumed_thing.td.properties:
-        LOGGER.info("Writing property 'write_property' = 200")
-        await consumed_thing.write_property("write_property", [200, 0, 0, 0])
+        LOGGER.info("Writing property 'write_property' = 210")
+        await consumed_thing.write_property("write_property", [210, 0, 0, 0])
 
         written_val = await consumed_thing.read_property("write_property")
         LOGGER.info("Read back 'write_property': %r", written_val)
@@ -281,11 +269,13 @@ async def main(
     target_host = host if host is not None else td_host
     target_port = port if port is not None else td_port
 
-    host_candidates = [target_host]
-    if target_host == "localhost":
-        host_candidates.extend(["::1", "127.0.0.1"])
+    if target_host in ("0.0.0.0", "::", "*"):
+        host_candidates = ["127.0.0.1", "::1"]
+    elif target_host == "localhost":
+        host_candidates = [target_host, "::1", "127.0.0.1"]
+    else:
+        host_candidates = [target_host]
 
-    # Keep order while removing duplicates.
     host_candidates = list(dict.fromkeys(host_candidates))
 
     last_error = None
@@ -305,8 +295,6 @@ async def main(
             td_runtime = build_runtime_td(td_doc, host=candidate, port=target_port)
             LOGGER.info("Connecting to Modbus Thing at %s:%s", candidate, target_port)
 
-            # Keep only the Modbus binding client to avoid protocol auto-selection
-            # falling back to non-Modbus clients.
             servient = Servient(catalogue_port=None, clients=[ModbusClient()])
 
             try:

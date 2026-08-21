@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Zenoh IoT Onboarding Dashboard</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem; background: #f4f5f7; }
+  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+  .subtitle { color: #666; margin-top: 0; margin-bottom: 1.5rem; font-size: 0.9rem; }
+
+  .onboard-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+    background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+  .onboard-form input[type=file] { flex: 1 1 240px; }
+  select, input[type=text], input[type=file] { padding: 0.35rem 0.5rem; border: 1px solid #ccc; border-radius: 6px; }
+  button { cursor: pointer; border: 1px solid #888; border-radius: 6px; background: #fff; padding: 0.35rem 0.7rem; font-size: 0.85rem; }
+  button:hover { background: #eee; }
+  button.danger { border-color: #c0392b; color: #c0392b; }
+  button.danger:hover { background: #fdecea; }
+  button.primary { border-color: #2563eb; color: #2563eb; }
+  button.primary:hover { background: #eaf1ff; }
+
+  #devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1rem; }
+  .device-card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }
+  .device-card h2 { font-size: 1.05rem; margin: 0 0 0.1rem 0; }
+  .device-meta { color: #777; font-size: 0.75rem; margin-bottom: 0.75rem; word-break: break-all; }
+  .badge { display: inline-block; background: #eef2ff; color: #3730a3; border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.7rem; margin-left: 0.4rem; }
+
+  .section-title { font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: #555; margin: 0.9rem 0 0.35rem 0; }
+  .interaction-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0; flex-wrap: wrap; }
+  .interaction-name { font-family: ui-monospace, monospace; font-size: 0.82rem; min-width: 140px; }
+  .value-box { font-family: ui-monospace, monospace; font-size: 0.78rem; background: #f0f0f0; border-radius: 4px; padding: 0.15rem 0.4rem; max-width: 220px; overflow-wrap: anywhere; }
+  .value-box.error { background: #fdecea; color: #c0392b; }
+  input.value-input { width: 120px; }
+
+  .event-log { list-style: none; margin: 0.35rem 0 0 0; padding: 0; max-height: 120px; overflow-y: auto;
+    background: #f8f8f8; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.75rem; }
+  .event-log li { padding: 0.15rem 0.4rem; border-bottom: 1px solid #eee; }
+  .empty { color: #999; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+
+<h1>Zenoh IoT Onboarding Dashboard</h1>
+<p class="subtitle">Upload a Thing Description to onboard a device. Every read, write, action and event below is routed through the Zenoh middleware.</p>
+
+<div class="onboard-form">
+  <input type="file" id="tdFile" accept=".json,.jsonld">
+  <select id="bindingSelect">
+    <option value="auto" selected>auto-detect binding</option>
+    <option value="modbus">modbus</option>
+    <option value="mqtt">mqtt</option>
+  </select>
+  <button class="primary" id="onboardBtn">Onboard device</button>
+  <span id="onboardStatus"></span>
+</div>
+
+<div id="devices"></div>
+
+<template id="deviceCardTemplate">
+  <div class="device-card">
+    <h2 class="device-title"></h2>
+    <div class="device-meta">
+      <span class="device-id"></span>
+      <span class="badge device-binding"></span>
+    </div>
+
+    <div class="section-title">Properties</div>
+    <div class="properties-list"></div>
+
+    <div class="section-title">Actions</div>
+    <div class="actions-list"></div>
+
+    <div class="section-title">Events</div>
+    <div class="events-list"></div>
+
+    <div class="section-title"></div>
+    <button class="danger offboard-btn">Offboard device</button>
+  </div>
+</template>
+
+<script>
+const devicesEl = document.getElementById("devices");
+const cardTemplate = document.getElementById("deviceCardTemplate");
+const eventPollers = {};
+
+async function api(path, options) {
+  const response = await fetch(path, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || response.statusText);
+  }
+  return data;
+}
+
+function parseMaybeJson(text) {
+  if (text === "") return undefined;
+  try { return JSON.parse(text); } catch (err) { return text; }
+}
+
+function renderProperty(device, name, schema, container) {
+  const row = document.createElement("div");
+  row.className = "interaction-row";
+
+  const label = document.createElement("span");
+  label.className = "interaction-name";
+  label.textContent = name;
+  row.appendChild(label);
+
+  const readBtn = document.createElement("button");
+  readBtn.textContent = "Read";
+  row.appendChild(readBtn);
+
+  const valueBox = document.createElement("span");
+  valueBox.className = "value-box";
+  valueBox.textContent = "—";
+  row.appendChild(valueBox);
+
+  readBtn.onclick = async () => {
+    valueBox.className = "value-box";
+    valueBox.textContent = "…";
+    try {
+      const data = await api(`/api/devices/${encodeURIComponent(device.id)}/properties/${encodeURIComponent(name)}/read`, { method: "POST" });
+      valueBox.textContent = JSON.stringify(data.value);
+    } catch (err) {
+      valueBox.className = "value-box error";
+      valueBox.textContent = err.message;
+    }
+  };
+
+  if (!schema.readOnly) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "value-input";
+    input.placeholder = "value (JSON or text)";
+    row.appendChild(input);
+
+    const writeBtn = document.createElement("button");
+    writeBtn.textContent = "Write";
+    row.appendChild(writeBtn);
+
+    writeBtn.onclick = async () => {
+      if (input.value.trim() === "") {
+        valueBox.className = "value-box error";
+        valueBox.textContent = "Enter a value first";
+        return;
+      }
+
+      valueBox.className = "value-box";
+      valueBox.textContent = "…";
+      try {
+        await api(`/api/devices/${encodeURIComponent(device.id)}/properties/${encodeURIComponent(name)}/write`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ value: parseMaybeJson(input.value) }),
+        });
+        valueBox.textContent = "written";
+      } catch (err) {
+        valueBox.className = "value-box error";
+        valueBox.textContent = err.message;
+      }
+    };
+  }
+
+  container.appendChild(row);
+}
+
+function renderAction(device, name, schema, container) {
+  const row = document.createElement("div");
+  row.className = "interaction-row";
+
+  const label = document.createElement("span");
+  label.className = "interaction-name";
+  label.textContent = name;
+  row.appendChild(label);
+
+  let input = null;
+  if (schema.input) {
+    input = document.createElement("input");
+    input.type = "text";
+    input.className = "value-input";
+    input.placeholder = "input (JSON or text)";
+    row.appendChild(input);
+  }
+
+  const invokeBtn = document.createElement("button");
+  invokeBtn.textContent = "Invoke";
+  row.appendChild(invokeBtn);
+
+  const valueBox = document.createElement("span");
+  valueBox.className = "value-box";
+  valueBox.textContent = "—";
+  row.appendChild(valueBox);
+
+  invokeBtn.onclick = async () => {
+    valueBox.className = "value-box";
+    valueBox.textContent = "…";
+    try {
+      const body = { input: input ? parseMaybeJson(input.value) : undefined };
+      const data = await api(`/api/devices/${encodeURIComponent(device.id)}/actions/${encodeURIComponent(name)}/invoke`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      valueBox.textContent = JSON.stringify(data.result);
+    } catch (err) {
+      valueBox.className = "value-box error";
+      valueBox.textContent = err.message;
+    }
+  };
+
+  container.appendChild(row);
+}
+
+function renderEvent(device, name, container) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "interaction-row";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.alignItems = "stretch";
+
+  const header = document.createElement("div");
+  header.className = "interaction-row";
+
+  const label = document.createElement("span");
+  label.className = "interaction-name";
+  label.textContent = name;
+  header.appendChild(label);
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.textContent = "Subscribe";
+  header.appendChild(toggleBtn);
+
+  wrapper.appendChild(header);
+
+  const log = document.createElement("ul");
+  log.className = "event-log";
+  const empty = document.createElement("li");
+  empty.className = "empty";
+  empty.textContent = "Not subscribed";
+  log.appendChild(empty);
+  wrapper.appendChild(log);
+
+  const pollerKey = `${device.id}::${name}`;
+  const seen = new Set();
+
+  async function poll() {
+    try {
+      const data = await api(`/api/devices/${encodeURIComponent(device.id)}/events/${encodeURIComponent(name)}/latest`);
+      for (const item of data.items) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        if (log.firstChild && log.firstChild.className === "empty") log.removeChild(log.firstChild);
+        const li = document.createElement("li");
+        li.textContent = JSON.stringify(item.value);
+        log.appendChild(li);
+        log.scrollTop = log.scrollHeight;
+      }
+    } catch (err) {
+      // Keep polling; a transient error shouldn't stop the subscription.
+    }
+  }
+
+  toggleBtn.onclick = () => {
+    if (eventPollers[pollerKey]) {
+      clearInterval(eventPollers[pollerKey]);
+      delete eventPollers[pollerKey];
+      toggleBtn.textContent = "Subscribe";
+    } else {
+      poll();
+      eventPollers[pollerKey] = setInterval(poll, 2000);
+      toggleBtn.textContent = "Unsubscribe";
+    }
+  };
+
+  container.appendChild(wrapper);
+}
+
+function renderDevice(device) {
+  const node = cardTemplate.content.cloneNode(true);
+  const card = node.querySelector(".device-card");
+  card.dataset.deviceId = device.id;
+
+  node.querySelector(".device-title").textContent = device.title;
+  node.querySelector(".device-id").textContent = device.id;
+  node.querySelector(".device-binding").textContent = device.binding;
+
+  const propertiesList = node.querySelector(".properties-list");
+  const propertyNames = Object.keys(device.properties);
+  if (propertyNames.length === 0) {
+    propertiesList.innerHTML = '<div class="empty">No properties</div>';
+  } else {
+    propertyNames.forEach((name) => renderProperty(device, name, device.properties[name], propertiesList));
+  }
+
+  const actionsList = node.querySelector(".actions-list");
+  const actionNames = Object.keys(device.actions);
+  if (actionNames.length === 0) {
+    actionsList.innerHTML = '<div class="empty">No actions</div>';
+  } else {
+    actionNames.forEach((name) => renderAction(device, name, device.actions[name], actionsList));
+  }
+
+  const eventsList = node.querySelector(".events-list");
+  const eventNames = Object.keys(device.events);
+  if (eventNames.length === 0) {
+    eventsList.innerHTML = '<div class="empty">No events</div>';
+  } else {
+    eventNames.forEach((name) => renderEvent(device, name, eventsList));
+  }
+
+  node.querySelector(".offboard-btn").onclick = async () => {
+    Object.keys(eventPollers)
+      .filter((key) => key.startsWith(`${device.id}::`))
+      .forEach((key) => { clearInterval(eventPollers[key]); delete eventPollers[key]; });
+
+    await api(`/api/devices/${encodeURIComponent(device.id)}/offboard`, { method: "POST" });
+    await refreshDevices();
+  };
+
+  devicesEl.appendChild(node);
+}
+
+async function refreshDevices() {
+  devicesEl.innerHTML = "";
+  const data = await api("/api/devices");
+  data.devices.forEach(renderDevice);
+}
+
+document.getElementById("onboardBtn").onclick = async () => {
+  const fileInput = document.getElementById("tdFile");
+  const status = document.getElementById("onboardStatus");
+
+  if (!fileInput.files.length) {
+    status.textContent = "Choose a TD file first.";
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("td", fileInput.files[0]);
+  formData.append("binding", document.getElementById("bindingSelect").value);
+
+  status.textContent = "Onboarding…";
+
+  try {
+    await api("/api/devices/onboard", { method: "POST", body: formData });
+    status.textContent = "";
+    fileInput.value = "";
+    await refreshDevices();
+  } catch (err) {
+    status.textContent = "Error: " + err.message;
+  }
+};
+
+refreshDevices();
+</script>
+</body>
+</html>

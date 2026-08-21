@@ -1,0 +1,31 @@
+{
+  "@context": [
+    "https://www.w3.org/2019/wot/td/v1",
+    "https://www.w3.org/2022/wot/td/v1.1"
+  ],
+  "id": "urn:plugfest:smart-home-presence-sensor",
+  "title": "PlugFestPresenceSensor",
+  "description": "",
+  "securityDefinitions": {
+    "nosec_sc": {
+      "scheme": "nosec"
+    }
+  },
+  "security": "nosec_sc",
+  "events": {
+    "presenceDetected": {
+      "title": "Presence detected",
+      "description": "",
+      "data": {
+        "type": "object"
+      },
+      "forms": [
+        {
+          "href": "mqtt://plugfest.thingweb.io:8087/smart-home-presence-sensor/events/presenceDetected",
+          "contentType": "application/json",
+          "op": "subscribeevent"
+        }
+      ]
+    }
+  }
+}

@@ -45,8 +45,13 @@ FEATURE_REQUISITES = {
     FEATURE_MQTT: {
         "max_version_exclusive": (3, 15),
         "min_version_inclusive": (3, 9),
-        "platforms": ["Linux", "Darwin"],
+        "platforms": ["Linux", "Darwin", "Windows"],
     },
+    FEATURE_MODBUS: {
+        "max_version_exclusive": (3, 15),
+        "min_version_inclusive": (3, 9),
+        "platforms": ["Linux", "Darwin", "Windows"],
+    }
 }
 
 _logger = logging.getLogger(__name__)
@@ -107,7 +112,11 @@ def is_coap_supported():
 def is_mqtt_supported():
     """Returns True if the MQTT binding is supported in this platform."""
 
-    return is_supported(FEATURE_MQTT)
+    try:
+        dep_ok = importlib.util.find_spec("amqtt") is not None
+    except Exception:
+        dep_ok = False
+    return is_supported(FEATURE_MQTT) and dep_ok
 
 
 def is_modbus_supported():

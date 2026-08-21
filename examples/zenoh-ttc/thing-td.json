@@ -7,7 +7,7 @@
   ],
   "id": "urn:PowerMeterTCP",
   "title": "HotelRoom PowerMeter TCP",
-  "base": "modbus://0.0.0.0:1502",
+  "base": "modbus+tcp://[::1]:1502",
   "securityDefinitions": {
     "nosec_sc": {
       "scheme": "nosec"
@@ -21,16 +21,16 @@
       "const": 200,
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/290?quantity=4",
           "op": [
             "writeproperty",
             "readproperty"
           ],
-          "modbus:unitID": 1,
-          "modbus:address": 290,
-          "modbus:quantity": 4,
+          "modv:unitID": 1,
+          "modv:address": 290,
+          "modv:quantity": 4,
           "modbus:type": "integer",
-          "modbus:entity": "holdingregister"
+          "modv:entity": "HoldingRegister"
         }
       ]
     },
@@ -40,17 +40,17 @@
       "const": 100,
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/190?quantity=4",
           "op": [
             "observeproperty",
             "unobserveproperty",
             "readproperty"
           ],
-          "modbus:unitID": 1,
-          "modbus:address": 190,
-          "modbus:quantity": 4,
+          "modv:unitID": 1,
+          "modv:address": 190,
+          "modv:quantity": 4,
           "modbus:type": "integer",
-          "modbus:entity": "holdingregister"
+          "modv:entity": "HoldingRegister"
         }
       ]
     },
@@ -59,13 +59,13 @@
       "type": "integer",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/0?quantity=4",
           "op": "readproperty",
           "modbus:type": "integer",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 0,
-          "modbus:quantity": 4
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 0,
+          "modv:quantity": 4
         }
       ]
     },
@@ -74,13 +74,13 @@
       "type": "integer",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/2?quantity=2",
           "op": "readproperty",
           "modbus:type": "int",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 2,
-          "modbus:quantity": 2
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 2,
+          "modv:quantity": 2
         }
       ]
     },
@@ -89,13 +89,13 @@
       "type": "integer",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/4?quantity=1",
           "op": "readproperty",
           "modbus:type": "byte",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 4,
-          "modbus:quantity": 1
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 4,
+          "modv:quantity": 1
         }
       ]
     },
@@ -104,13 +104,13 @@
       "type": "integer",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/5?quantity=1",
           "op": "readproperty",
           "modbus:type": "unsignedShort",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 5,
-          "modbus:quantity": 1
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 5,
+          "modv:quantity": 1
         }
       ]
     },
@@ -119,13 +119,13 @@
       "type": "integer",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/6?quantity=2",
           "op": "readproperty",
           "modbus:type": "unsignedInt",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 6,
-          "modbus:quantity": 2
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 6,
+          "modv:quantity": 2
         }
       ]
     },
@@ -134,13 +134,13 @@
       "type": "integer",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/8?quantity=4",
           "op": "readproperty",
           "modbus:type": "unsignedLong",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 8,
-          "modbus:quantity": 4
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 8,
+          "modv:quantity": 4
         }
       ]
     },
@@ -149,13 +149,13 @@
       "type": "integer",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/12?quantity=1",
           "op": "readproperty",
           "modbus:type": "unsignedByte",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 12,
-          "modbus:quantity": 1
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 12,
+          "modv:quantity": 1
         }
       ]
     },
@@ -164,13 +164,13 @@
       "type": "integer",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/13?quantity=4",
           "op": "readproperty",
           "modbus:type": "long",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 13,
-          "modbus:quantity": 4
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 13,
+          "modv:quantity": 4
         }
       ]
     },
@@ -179,13 +179,13 @@
       "type": "integer",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/17?quantity=1",
           "op": "readproperty",
           "modbus:type": "short",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 17,
-          "modbus:quantity": 1
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 17,
+          "modv:quantity": 1
         }
       ]
     },
@@ -194,13 +194,13 @@
       "type": "number",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/18?quantity=4",
           "op": "readproperty",
           "modbus:type": "double",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 18,
-          "modbus:quantity": 4
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 18,
+          "modv:quantity": 4
         }
       ]
     },
@@ -209,13 +209,13 @@
       "type": "number",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/22?quantity=2",
           "op": "readproperty",
           "modbus:type": "float",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 22,
-          "modbus:quantity": 2
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 22,
+          "modv:quantity": 2
         }
       ]
     },
@@ -225,13 +225,13 @@
       "const": "2025-08-19 15:51:46 UTC",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/24?quantity=12",
           "op": "readproperty",
           "modbus:type": "hexBinary",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 24,
-          "modbus:quantity": 12
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 24,
+          "modv:quantity": 12
         }
       ]
     },
@@ -241,13 +241,13 @@
       "const": "OneConnectivity!",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/36?quantity=8",
           "op": "readproperty",
           "modbus:type": "string",
-          "modbus:entity": "holdingregister",
-          "modbus:unitID": 1,
-          "modbus:address": 36,
-          "modbus:quantity": 8
+          "modv:entity": "HoldingRegister",
+          "modv:unitID": 1,
+          "modv:address": 36,
+          "modv:quantity": 8
         }
       ]
     },
@@ -256,13 +256,13 @@
       "type": "number",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/44?quantity=4",
           "op": "readproperty",
-          "modbus:unitID": 1,
+          "modv:unitID": 1,
           "modbus:type": "decimal",
-          "modbus:entity": "holdingregister",
-          "modbus:address": 44,
-          "modbus:quantity": 4
+          "modv:entity": "HoldingRegister",
+          "modv:address": 44,
+          "modv:quantity": 4
         }
       ]
     },
@@ -271,12 +271,13 @@
       "type": "boolean",
       "forms": [
         {
-          "href": "/",
+          "href": "modbus+tcp://[::1]:1502/1/48?quantity=1",
           "op": "readproperty",
-          "modbus:unitID": 1,
-          "modbus:address": 48,
+          "modv:unitID": 1,
+          "modv:address": 48,
           "modbus:type": "boolean",
-          "modbus:entity": "coil"
+          "modv:entity": "Coil",
+          "modv:quantity": 1
         }
       ]
     }
