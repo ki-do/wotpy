@@ -660,7 +660,14 @@ class MQTTClient(BaseProtocolClient):
                         continue
 
                     try:
-                        msg_data = json.loads(msg.data.decode())
+                        raw_payload = msg.data.decode()
+
+                        try:
+                            msg_data = json.loads(raw_payload)
+                        except (json.JSONDecodeError, TypeError):
+                            # Not every external MQTT publisher sends JSON (e.g. plain text sensor payloads).
+                            msg_data = raw_payload
+
                         next_item = next_item_builder(msg_data)
                         observer.on_next(next_item)
                     except Exception as ex:
@@ -737,7 +744,11 @@ class MQTTClient(BaseProtocolClient):
         topic = parsed_href["topic"]
 
         def next_item_builder(msg_data):
-            return EmittedEvent(init=msg_data.get("data"), name=name)
+            # Payloads published by a wotpy MQTT server wrap the event data as
+            # {"name": ..., "data": ..., "timestamp": ...}. External (non-wotpy) MQTT
+            # publishers send the event data directly, with no such envelope.
+            payload = msg_data.get("data") if isinstance(msg_data, dict) and "data" in msg_data else msg_data
+            return EmittedEvent(init=payload, name=name)
 
         subscribe = self._build_subscribe(
             broker_url=broker_url,
