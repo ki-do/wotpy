@@ -105,7 +105,7 @@ class ModbusClient(BaseProtocolClient):
 
         return raw.get(key, default)
 
-    def _build_op_config(self, form, input_value=None):
+    def _build_op_config(self, form, input_value=None, is_write=False):
         href_data = self._parse_href(form.href)
 
         timeout_ms = self._form_raw_value(form, ModbusVocabularyKeys.TIMEOUT, self._timeout_default_ms)
@@ -133,8 +133,8 @@ class ModbusClient(BaseProtocolClient):
                 quantity = 1
 
         if function_code is None:
-            is_write = input_value is not None
-
+            # is_write reflects which operation the caller is performing, not whether a
+            # value happens to be present: writing None/null must still resolve a write function.
             if entity == ModbusEntity.COIL:
                 function_code = (ModbusFunction.READ_COIL if not is_write else
                                  ModbusFunction.WRITE_SINGLE_COIL if int(quantity) == 1 else
@@ -264,7 +264,7 @@ class ModbusClient(BaseProtocolClient):
 
         form = next(form for form in td.get_property_forms(name) if form.href == form_href)
 
-        config = self._build_op_config(form, input_value=value)
+        config = self._build_op_config(form, input_value=value, is_write=True)
         connection = await self._get_connection(config["host"], config["port"], config["timeout_ms"])
 
         payload = self._coerce_write_payload(config, value)
