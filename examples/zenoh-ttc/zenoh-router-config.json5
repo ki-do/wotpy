@@ -1,11 +1,6 @@
 {
-  mode: "client",
-  connect: {
-    endpoints: ["tcp/localhost:7447"]
-  },
-  plugins: {
-    mqtt: {
-      port: "0.0.0.0:1885"
-    }
+  "mode": "router",
+  "listen": {
+    "endpoints": ["tcp/[::]:7447"]
   }
 }

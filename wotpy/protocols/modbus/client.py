@@ -133,8 +133,6 @@ class ModbusClient(BaseProtocolClient):
                 quantity = 1
 
         if function_code is None:
-            # is_write reflects which operation the caller is performing, not whether a
-            # value happens to be present: writing None/null must still resolve a write function.
             if entity == ModbusEntity.COIL:
                 function_code = (ModbusFunction.READ_COIL if not is_write else
                                  ModbusFunction.WRITE_SINGLE_COIL if int(quantity) == 1 else

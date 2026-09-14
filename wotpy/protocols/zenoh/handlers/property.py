@@ -132,7 +132,7 @@ class PropertyZenohHandler(BaseZenohHandler):
         await self.publish_write_ack(sample, parsed_msg)
 
     async def publish_write_ack(self, sample, parsed_msg):
-        """Publishes the write ACK message for the given write request."""
+        """Takes a Property write request message and publishes the related write ACK message."""
 
         ack_code = parsed_msg.get(self.KEY_ACK, None)
 

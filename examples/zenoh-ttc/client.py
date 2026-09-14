@@ -3,9 +3,6 @@
 """
 Consume a Modbus Thing from a TD file.
 
-This example accepts TDs that use "modbus:*" terms and normalizes them to the
-"modv:*" terms currently used by this repository's Modbus client.
-
 Usage:
     python client.py [--host 192.168.20.76] [--port 502] [--td ./sentron4220.tm.jsonld]
 """

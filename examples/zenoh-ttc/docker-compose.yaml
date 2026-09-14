@@ -2,40 +2,19 @@ services:
   zenoh-router:
     image: eclipse/zenoh:latest
     container_name: zenoh-router
-    network_mode: "host"
-    volumes:
-      - ./config.json5:/config.json5:ro
-    command: ["-c", "/config.json5"]
-    restart: unless-stopped
-
-  zenoh-mqtt-bridge:
-    image: eclipse/zenoh-bridge-mqtt:latest
-    container_name: zenoh-mqtt-bridge
-    network_mode: "host"
-    environment:
-      - RUST_LOG=zenoh=info,zenoh_plugin_mqtt=debug
+    ports:
+      - "7447:7447"
+      - "7446:7446/udp"
     volumes:
       - ./zenoh-router-config.json5:/config.json5:ro
     command: ["-c", "/config.json5"]
     restart: unless-stopped
-
-  mosquitto-bridge:
-    image: eclipse-mosquitto:latest
-    container_name: mosquitto-bridge
-    network_mode: "host"
+  zenoh-mqtt-bridge:
+    image: eclipse/zenoh-bridge-mqtt:latest
+    container_name: zenoh-mqtt-bridge
+    ports:
+      - "8883:8883"
     volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ./isrgrootx1.pem:/mosquitto/config/isrgrootx1.pem:ro
+      - ./zenoh-bridge-config.json5:/config.json5:ro
+    command: ["-c", "/config.json5"]
     restart: unless-stopped
-
-  mqtt-relay:
-    image: python:3.11-alpine
-    container_name: mqtt-relay
-    network_mode: "host"
-    volumes:
-      - ./mqtt_relay.py:/relay.py:ro
-    command: sh -c "pip install paho-mqtt -q && python /relay.py"
-    restart: unless-stopped
-    depends_on:
-      - mosquitto-bridge
-      - zenoh-mqtt-bridge

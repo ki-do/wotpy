@@ -44,8 +44,6 @@ EVENT_RESUBSCRIBE_MAX_DELAY = 60.0
 
 
 def _strip_binding_terms(interaction):
-    """Drops source-binding metadata so the exposed TD contains only Zenoh forms."""
-
     clean = {
         key: value for key, value in interaction.items()
         if key != "forms" and not key.startswith(("modv:", "modbus:", "mqtt:"))
@@ -57,8 +55,6 @@ def _strip_binding_terms(interaction):
 
 
 def build_property_read_proxy(consumed_thing, name):
-    """Factory for proxy Property read handlers."""
-
     async def _proxy():
         awaitable = consumed_thing.properties[name].read(timeout=TIMEOUT_PROP_READ)
         return await asyncio.wait_for(awaitable, timeout=TIMEOUT_PROP_READ * TIMEOUT_HARD_FACTOR)
@@ -67,8 +63,6 @@ def build_property_read_proxy(consumed_thing, name):
 
 
 def build_property_write_proxy(consumed_thing, name):
-    """Factory for proxy Property write handlers."""
-
     async def _proxy(value):
         awaitable = consumed_thing.properties[name].write(value, timeout=TIMEOUT_PROP_WRITE)
         await asyncio.wait_for(awaitable, timeout=TIMEOUT_PROP_WRITE * TIMEOUT_HARD_FACTOR)
@@ -77,8 +71,6 @@ def build_property_write_proxy(consumed_thing, name):
 
 
 def subscribe_event_proxy(consumed_thing, exposed_thing, name):
-    """Forwards source events to the matching Zenoh event."""
-
     state = {"subscription": None, "delay": EVENT_RESUBSCRIBE_DELAY}
 
     def subscribe():
@@ -103,8 +95,6 @@ def subscribe_event_proxy(consumed_thing, exposed_thing, name):
 
 
 def build_proxy_td(source_td, thing_id, thing_title, property_names):
-    """Builds a fresh Thing Description for the Zenoh proxy Thing."""
-
     source_properties = source_td.get("properties", {})
     source_events = source_td.get("events", {})
 
@@ -128,8 +118,6 @@ def build_proxy_td(source_td, thing_id, thing_title, property_names):
 
 
 def preview_proxy_td(source_td, thing_id, thing_title, max_properties, router_url):
-    """Builds the proxy TD (including Zenoh forms) without connecting to anything."""
-
     property_names = list(source_td.get("properties", {}).keys())[:max_properties]
     proxy_td = build_proxy_td(source_td, thing_id, thing_title, property_names)
 
@@ -148,8 +136,6 @@ def preview_proxy_td(source_td, thing_id, thing_title, max_properties, router_ur
 
 
 async def expose_proxy(wot, consumed_thing, source_td, thing_id, thing_title, max_properties):
-    """Takes a Consumed Thing and exposes a Zenoh Exposed Thing that proxies it."""
-
     property_names = list(consumed_thing.td.properties.keys())[:max_properties]
     proxy_td = build_proxy_td(source_td, thing_id, thing_title, property_names)
 
@@ -168,8 +154,6 @@ async def expose_proxy(wot, consumed_thing, source_td, thing_id, thing_title, ma
 
 
 def infer_source_binding(source_td):
-    """Infers the source binding from the first property form with a URI scheme."""
-
     schemes = [urlparse(str(source_td.get("base", ""))).scheme]
 
     for interaction_map in (source_td.get("properties", {}), source_td.get("events", {})):
@@ -187,8 +171,6 @@ def infer_source_binding(source_td):
 
 
 def build_source_client(source_binding):
-    """Creates the source protocol client selected for the source TD."""
-
     if source_binding == "modbus":
         return ModbusClient()
 
@@ -213,8 +195,6 @@ def _load_source(source_td_path, source_binding):
 
 
 def _proxy_identity(source_td, thing_id, thing_title, is_only_source):
-    """Derives the proxy Thing id/title. Explicit overrides only apply with a single source."""
-
     if is_only_source:
         return thing_id, thing_title
 
