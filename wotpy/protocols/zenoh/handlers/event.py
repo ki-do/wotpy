@@ -60,10 +60,7 @@ class EventZenohHandler(BaseZenohHandler):
     def build_event_topic(self, thing, event):
         """Returns the Zenoh topic for Event emissions."""
 
-        return "{}/event/{}/{}".format(
-            self.servient_id,
-            thing.url_name,
-            event.url_name)
+        return self.zenoh_server.build_event_topic(event)
 
     async def init(self):
         """Initializes the Zenoh handler.

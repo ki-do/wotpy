@@ -4,14 +4,17 @@
 Usage:
     python zenoh_proxy.py --source-td ./thing-td.json [--source-binding modbus] \
         [--router tcp/localhost:7447]
+    python zenoh_proxy.py --source-td ./lorawan-td.json --lorawan-app-id <appID>
 """
 
 import argparse
 import asyncio
+import base64
 import json
 import logging
 import os
 import re
+import struct
 import sys
 from urllib.parse import urlparse
 
@@ -25,7 +28,6 @@ if _EXAMPLE_DIR not in sys.path:
 
 from tornado.ioloop import IOLoop
 
-from wotpy.protocols.modbus.client import ModbusClient
 from wotpy.protocols.zenoh.server import ZenohServer
 from wotpy.wot.servient import Servient
 from wotpy.wot.td import ThingDescription
@@ -35,12 +37,26 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 
 _RUNNING_SERVIENT = None
+_LORAWAN_SUBSCRIBERS = []
 
 TIMEOUT_PROP_READ = 30.0
 TIMEOUT_PROP_WRITE = 30.0
 TIMEOUT_HARD_FACTOR = 1.2
 EVENT_RESUBSCRIBE_DELAY = 2.0
 EVENT_RESUBSCRIBE_MAX_DELAY = 60.0
+
+LORAWAN_WIRE_TYPES = {
+    "u8": "B",
+    "s8": "b",
+    "u16": "H",
+    "s16": "h",
+    "u32": "I",
+    "s32": "i",
+    "u64": "Q",
+    "s64": "q",
+    "f32": "f",
+    "f64": "d",
+}
 
 
 def _strip_binding_terms(interaction):
@@ -117,12 +133,16 @@ def build_proxy_td(source_td, thing_id, thing_title, property_names):
     }
 
 
-def preview_proxy_td(source_td, thing_id, thing_title, max_properties, router_url):
+def preview_proxy_td(source_td, thing_id, thing_title, max_properties, router_url, event_topic_prefix=None):
     property_names = list(source_td.get("properties", {}).keys())[:max_properties]
     proxy_td = build_proxy_td(source_td, thing_id, thing_title, property_names)
 
     thing = Thing(thing_fragment=ThingDescription(proxy_td).to_thing_fragment())
-    zenoh_server = ZenohServer(router_url=router_url)
+    event_topic_builder = None
+    if event_topic_prefix:
+        event_topic_builder = lambda event: "{}/{}".format(event_topic_prefix, event.name)
+
+    zenoh_server = ZenohServer(router_url=router_url, event_topic_builder=event_topic_builder)
 
     for interaction in thing.properties.values():
         for form in zenoh_server.build_forms(hostname=None, interaction=interaction):
@@ -162,6 +182,10 @@ def infer_source_binding(source_td):
                 schemes.append(urlparse(str(form.get("href", ""))).scheme)
 
     for scheme in schemes:
+        if scheme.startswith("zenoh"):
+            return "zenoh"
+        if scheme.startswith("lorawan"):
+            return "lorawan"
         if scheme.startswith("modbus"):
             return "modbus"
         if scheme.startswith("mqtt"):
@@ -170,8 +194,82 @@ def infer_source_binding(source_td):
     raise ValueError("Could not infer a source binding; pass --source-binding explicitly")
 
 
+def lorawan_event_topic_prefix(source_td, application_id):
+    application_id = source_td.get("lorav:applicationID", application_id)
+    dev_eui = source_td.get("lorav:devEUI")
+
+    if not application_id:
+        raise ValueError("LoRaWAN TD requires --lorawan-app-id or lorav:applicationID")
+    if not dev_eui:
+        raise ValueError("LoRaWAN TD is missing lorav:devEUI")
+
+    return "application/{}/device/{}/event/up".format(application_id, dev_eui)
+
+
+def decode_lorawan_events(source_td, uplink):
+    """Decodes event values from a ChirpStack uplink using LoRaWAN form terms."""
+
+    if isinstance(uplink, (bytes, bytearray)):
+        payload = bytes(uplink)
+    else:
+        encoded = uplink.get("data") if isinstance(uplink, dict) else uplink
+        if not isinstance(encoded, str):
+            raise ValueError("LoRaWAN uplink must contain a base64 'data' value")
+        payload = base64.b64decode(encoded, validate=True)
+
+    values = {}
+    for name, event in source_td.get("events", {}).items():
+        form = next((item for item in event.get("forms", []) if "lorav:byteOffset" in item), None)
+        if form is None:
+            continue
+
+        wire_type = form.get("lorav:wireType")
+        if wire_type not in LORAWAN_WIRE_TYPES:
+            raise ValueError("Unsupported LoRaWAN wire type '{}' for event '{}'".format(wire_type, name))
+
+        byte_order = form.get("lorav:byteOrder", "big").lower()
+        prefix = "<" if byte_order in ("little", "littleendian", "little-endian") else ">"
+        value = struct.unpack_from(prefix + LORAWAN_WIRE_TYPES[wire_type], payload, int(form["lorav:byteOffset"]))[0]
+
+        divisor = form.get("lorav:divisor")
+        if divisor is not None:
+            value /= divisor
+
+        values[name] = value
+
+    return values
+
+
+def subscribe_lorawan_uplinks(zenoh_server, source_td, exposed_thing, application_id):
+    """Subscribes to raw ChirpStack uplinks and emits decoded Thing events."""
+
+    topic = lorawan_event_topic_prefix(source_td, application_id)
+    loop = asyncio.get_running_loop()
+
+    def on_uplink(sample):
+        try:
+            raw_payload = sample.payload.to_bytes()
+            try:
+                uplink = json.loads(raw_payload.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                uplink = raw_payload
+
+            values = decode_lorawan_events(source_td, uplink)
+            for name, value in values.items():
+                loop.call_soon_threadsafe(exposed_thing.events[name].emit, value)
+        except Exception:
+            LOGGER.warning("Could not decode LoRaWAN uplink on %s", topic, exc_info=True)
+
+    subscriber = zenoh_server._session.declare_subscriber(topic, on_uplink)
+    _LORAWAN_SUBSCRIBERS.append(subscriber)
+    LOGGER.info("Subscribed to LoRaWAN uplinks on %s", topic)
+
+    return subscriber
+
+
 def build_source_client(source_binding):
     if source_binding == "modbus":
+        from wotpy.protocols.modbus.client import ModbusClient
         return ModbusClient()
 
     if source_binding == "mqtt":
@@ -202,7 +300,7 @@ def _proxy_identity(source_td, thing_id, thing_title, is_only_source):
     return "urn:zenoh:proxy:{}".format(slug), source_td.get("title", "ZenohProxy")
 
 
-async def main(source_td_paths, source_bindings, router_url, max_properties, thing_id, thing_title, catalogue_port, servient_id=None, dry_run=False):
+async def main(source_td_paths, source_bindings, router_url, max_properties, thing_id, thing_title, catalogue_port, servient_id=None, lorawan_app_id=None, dry_run=False):
     source_bindings = list(source_bindings) + ["auto"] * (len(source_td_paths) - len(source_bindings))
     sources = [_load_source(path, binding) for path, binding in zip(source_td_paths, source_bindings)]
     is_only_source = len(sources) == 1
@@ -213,18 +311,35 @@ async def main(source_td_paths, source_bindings, router_url, max_properties, thi
                 source_td,
                 *_proxy_identity(source_td, thing_id, thing_title, is_only_source),
                 max_properties,
-                router_url)
-            for source_td, _ in sources
+                router_url,
+                lorawan_event_topic_prefix(source_td, lorawan_app_id) if binding == "lorawan" else None)
+            for source_td, binding in sources
         ]
         print(json.dumps(previews if len(previews) > 1 else previews[0], indent=2))
         IOLoop.current().stop()
         return
 
-    bindings_needed = {binding for _, binding in sources}
+    bindings_needed = {binding for _, binding in sources if binding != "lorawan"}
     clients = {binding: build_source_client(binding) for binding in bindings_needed}
 
+    lorawan_topics = {}
+    for source_td, binding in sources:
+        if binding == "lorawan":
+            proxy_id, _ = _proxy_identity(source_td, thing_id, thing_title, is_only_source)
+            lorawan_topics[proxy_id] = lorawan_event_topic_prefix(source_td, lorawan_app_id)
+
+    def event_topic_builder(event):
+        prefix = lorawan_topics.get(event.thing.id)
+        if prefix:
+            return "{}/{}".format(prefix, event.name)
+        return "{}/event/{}/{}".format(zenoh_server.servient_id, event.thing.url_name, event.url_name)
+
     servient = Servient(catalogue_port=catalogue_port, clients=list(clients.values()))
-    servient.add_server(ZenohServer(router_url=router_url, servient_id=servient_id))
+    zenoh_server = ZenohServer(
+        router_url=router_url,
+        servient_id=servient_id,
+        event_topic_builder=event_topic_builder if lorawan_topics else None)
+    servient.add_server(zenoh_server)
 
     global _RUNNING_SERVIENT
     _RUNNING_SERVIENT = servient
@@ -234,16 +349,23 @@ async def main(source_td_paths, source_bindings, router_url, max_properties, thi
     for source_td, source_binding in sources:
         LOGGER.info("Consuming source Thing using the %s binding", source_binding)
 
-        consumed_thing = wot.consume(json.dumps(source_td))
         proxy_thing_id, proxy_thing_title = _proxy_identity(source_td, thing_id, thing_title, is_only_source)
 
-        exposed_thing = await expose_proxy(
-            wot=wot,
-            consumed_thing=consumed_thing,
-            source_td=source_td,
-            thing_id=proxy_thing_id,
-            thing_title=proxy_thing_title,
-            max_properties=max_properties)
+        if source_binding == "lorawan":
+            proxy_td = build_proxy_td(source_td, proxy_thing_id, proxy_thing_title, [])
+            exposed_thing = wot.produce(json.dumps(proxy_td))
+            exposed_thing.expose()
+            subscribe_lorawan_uplinks(zenoh_server, source_td, exposed_thing, lorawan_app_id)
+        else:
+            consumed_thing = wot.consume(json.dumps(source_td))
+
+            exposed_thing = await expose_proxy(
+                wot=wot,
+                consumed_thing=consumed_thing,
+                source_td=source_td,
+                thing_id=proxy_thing_id,
+                thing_title=proxy_thing_title,
+                max_properties=max_properties)
 
         exposed_td = ThingDescription.from_thing(exposed_thing.thing).to_dict()
         print(json.dumps(exposed_td, indent=2))
@@ -257,13 +379,14 @@ async def main(source_td_paths, source_bindings, router_url, max_properties, thi
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Expose one or more source Things as Zenoh proxy Things")
     parser.add_argument("--source-td", action="append", required=True, help="Path to a valid source Thing Description (repeatable)")
-    parser.add_argument("--source-binding", action="append", choices=["auto", "modbus", "mqtt"], default=[], help="Source protocol binding per --source-td, same order (default: infer from TD forms)")
+    parser.add_argument("--source-binding", action="append", choices=["auto", "modbus", "mqtt", "lorawan"], default=[], help="Source protocol binding per --source-td, same order (default: infer from TD forms)")
     parser.add_argument("--router", default="tcp/localhost:7447", help="Zenoh router URL")
     parser.add_argument("--max-properties", type=int, default=15, help="Maximum number of properties to proxy")
     parser.add_argument("--thing-id", default="urn:modbus:zenoh:proxy", help="ID of the exposed Zenoh Thing (only used with a single --source-td)")
     parser.add_argument("--thing-title", default="ModbusZenohProxy", help="Title of the exposed Zenoh Thing (only used with a single --source-td)")
     parser.add_argument("--catalogue-port", type=int, default=9292, help="TD catalogue port (0 to disable)")
     parser.add_argument("--servient-id", default=None, help="Zenoh servient/topic namespace (default: 'wotpy'). Set this to avoid colliding with other proxy instances sharing the same router.")
+    parser.add_argument("--lorawan-app-id", default=os.environ.get("LORAWAN_APP_ID"), help="ChirpStack application ID for LoRaWAN TDs (or set LORAWAN_APP_ID)")
     parser.add_argument("--dry-run", action="store_true", help="Only print the proxy TD(s); do not connect to any source or Zenoh")
     args = parser.parse_args()
 
@@ -277,11 +400,14 @@ if __name__ == "__main__":
         thing_title=args.thing_title,
         catalogue_port=args.catalogue_port or None,
         servient_id=args.servient_id,
+        lorawan_app_id=args.lorawan_app_id,
         dry_run=args.dry_run)
 
     try:
         IOLoop.current().start()
     except KeyboardInterrupt:
         LOGGER.info("Interrupted, closing the Zenoh session...")
+        for subscriber in _LORAWAN_SUBSCRIBERS:
+            subscriber.undeclare()
         if _RUNNING_SERVIENT is not None:
             IOLoop.current().run_sync(_RUNNING_SERVIENT.shutdown)

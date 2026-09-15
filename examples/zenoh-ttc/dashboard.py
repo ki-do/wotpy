@@ -116,7 +116,18 @@ class DashboardApp:
         await self._proxy_servient.shutdown()
 
     async def onboard(self, td_bytes, binding_hint="auto"):
-        source_td = json.loads(td_bytes)
+        source_tds = json.loads(td_bytes)
+        if not isinstance(source_tds, list):
+            source_tds = [source_tds]
+        if not source_tds:
+            raise ValueError("TD file contains no Thing Descriptions")
+
+        return [await self._onboard_td(source_td, binding_hint) for source_td in source_tds]
+
+    async def _onboard_td(self, source_td, binding_hint="auto"):
+        if not isinstance(source_td, dict):
+            raise ValueError("Each Thing Description must be a JSON object")
+
         binding = zenoh_proxy.infer_source_binding(source_td) if binding_hint in (None, "auto") else binding_hint
 
         suffix = uuid.uuid4().hex[:8]
@@ -124,30 +135,38 @@ class DashboardApp:
         device_id = "urn:dashboard:device:{}-{}".format(base_slug, suffix)
         device_title = "{} ({})".format(source_td.get("title", "Device"), suffix)
 
-        consumed_thing = self.proxy_wot.consume(json.dumps(source_td))
+        if binding == "zenoh":
+            exposed_thing = None
+            exposed_td_dict = source_td
+            device_consumed_thing = self.consumer_wot.consume(json.dumps(source_td))
+            property_names = list(device_consumed_thing.td.properties.keys())
+            action_names = list(device_consumed_thing.td.actions.keys())
+            event_names = list(device_consumed_thing.td.events.keys())
+        else:
+            consumed_thing = self.proxy_wot.consume(json.dumps(source_td))
 
-        property_names = list(consumed_thing.td.properties.keys())
-        action_names = list(consumed_thing.td.actions.keys())
-        event_names = list(consumed_thing.td.events.keys())
+            property_names = list(consumed_thing.td.properties.keys())
+            action_names = list(consumed_thing.td.actions.keys())
+            event_names = list(consumed_thing.td.events.keys())
 
-        proxy_td = build_dashboard_proxy_td(source_td, device_id, device_title, property_names, action_names)
-        exposed_thing = self.proxy_wot.produce(json.dumps(proxy_td))
+            proxy_td = build_dashboard_proxy_td(source_td, device_id, device_title, property_names, action_names)
+            exposed_thing = self.proxy_wot.produce(json.dumps(proxy_td))
 
-        for name in property_names:
-            exposed_thing.set_property_read_handler(name, zenoh_proxy.build_property_read_proxy(consumed_thing, name))
-            exposed_thing.set_property_write_handler(name, zenoh_proxy.build_property_write_proxy(consumed_thing, name))
+            for name in property_names:
+                exposed_thing.set_property_read_handler(name, zenoh_proxy.build_property_read_proxy(consumed_thing, name))
+                exposed_thing.set_property_write_handler(name, zenoh_proxy.build_property_write_proxy(consumed_thing, name))
 
-        for name in action_names:
-            exposed_thing.set_action_handler(name, build_action_invoke_proxy(consumed_thing, name))
+            for name in action_names:
+                exposed_thing.set_action_handler(name, build_action_invoke_proxy(consumed_thing, name))
 
-        for name in event_names:
-            zenoh_proxy.subscribe_event_proxy(consumed_thing, exposed_thing, name)
+            for name in event_names:
+                zenoh_proxy.subscribe_event_proxy(consumed_thing, exposed_thing, name)
 
-        exposed_thing.expose()
+            exposed_thing.expose()
 
-        exposed_td_dict = ThingDescription.from_thing(exposed_thing.thing).to_dict()
+            exposed_td_dict = ThingDescription.from_thing(exposed_thing.thing).to_dict()
 
-        device_consumed_thing = self.consumer_wot.consume(json.dumps(exposed_td_dict))
+            device_consumed_thing = self.consumer_wot.consume(json.dumps(exposed_td_dict))
 
         event_buffers = {name: deque(maxlen=EVENT_BUFFER_SIZE) for name in event_names}
         subscriptions = []
@@ -188,7 +207,8 @@ class DashboardApp:
         for subscription in device["subscriptions"]:
             subscription.dispose()
 
-        device["exposed_thing"].destroy()
+        if device["exposed_thing"] is not None:
+            device["exposed_thing"].destroy()
 
         LOGGER.info("Offboarded device '%s'", device["title"])
 
@@ -248,12 +268,13 @@ class OnboardHandler(BaseHandler):
         binding_hint = self.get_body_argument("binding", "auto")
 
         try:
-            device = await APP.onboard(td_files[0]["body"], binding_hint)
+            devices = await APP.onboard(td_files[0]["body"], binding_hint)
         except Exception as error:
             LOGGER.warning("Onboarding failed: %s", error, exc_info=True)
             raise tornado.web.HTTPError(400, reason=str(error))
 
-        self.write_json(device_summary(device))
+        summaries = [device_summary(device) for device in devices]
+        self.write_json(summaries[0] if len(summaries) == 1 else {"devices": summaries})
 
 
 class OffboardHandler(BaseHandler):
