@@ -477,14 +477,14 @@ class ZenohClient(BaseProtocolClient):
 
         if not replies:
             raise ClientRequestTimeout
-        
+
         reply = replies[0]
-        if reply.ok is None:
-            raise RuntimeError("Zenoh property read: Invalid reply format")
-        elif not reply.ok:
+        if reply.err is not None:
             err_text = reply.err.payload.to_string() if reply.err is not None else "Unknown error"
             raise RuntimeError(f"Zenoh property read error: {err_text}")
-        
+        if reply.ok is None:
+            raise RuntimeError("Zenoh property read: Invalid reply format")
+
         return json.loads(reply.ok.payload.to_string()).get("value")
 
     def _build_subscribe(self, router_url, topic, next_item_builder):

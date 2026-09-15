@@ -153,7 +153,14 @@ class DashboardApp:
             exposed_thing = self.proxy_wot.produce(json.dumps(proxy_td))
 
             for name in property_names:
-                exposed_thing.set_property_read_handler(name, zenoh_proxy.build_property_read_proxy(consumed_thing, name))
+                exposed_thing.set_property_read_handler(
+                    name,
+                    zenoh_proxy.build_property_read_proxy(
+                        consumed_thing,
+                        name,
+                        source_td.get("properties", {}).get(name),
+                    ),
+                )
                 exposed_thing.set_property_write_handler(name, zenoh_proxy.build_property_write_proxy(consumed_thing, name))
 
             for name in action_names:
