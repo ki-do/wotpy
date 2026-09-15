@@ -56,7 +56,7 @@ class ZenohServer(BaseProtocolServer):
     SCHEME_PREFIX = 'zenoh'
 
     def __init__(self, router_url, property_callback_ms=None,
-                 event_callback_ms=None, servient_id=None):
+                 event_callback_ms=None, servient_id=None, event_topic_builder=None):
         super().__init__(port=None)
         self._transport, self._router_netloc = self._split_locator(router_url)
         self._scheme = "{}+{}".format(self.SCHEME_PREFIX, self._transport)
@@ -64,6 +64,7 @@ class ZenohServer(BaseProtocolServer):
         self._server_lock = asyncio.Lock()
         self._lock_conn = asyncio.Lock()
         self._servient_id = servient_id
+        self._event_topic_builder = event_topic_builder
         self._servient = None
         self._session = None
         self._logr = logging.getLogger(__name__)
@@ -212,12 +213,10 @@ class ZenohServer(BaseProtocolServer):
     def _build_forms_event(self, event):
         """Builds and returns the Zenoh Form instances for the given Event interaction."""
 
-        href = "{}://{}/{}/event/{}/{}".format(
+        href = "{}://{}/{}".format(
             self.scheme,
             self._router_netloc,
-            self.servient_id,
-            event.thing.url_name,
-            event.url_name)
+            self.build_event_topic(event))
 
         form = Form(
             interaction=event,
@@ -227,6 +226,17 @@ class ZenohServer(BaseProtocolServer):
             op=InteractionVerbs.SUBSCRIBE_EVENT)
 
         return [form]
+
+    def build_event_topic(self, event):
+        """Returns the key expression used to publish an Event."""
+
+        if self._event_topic_builder is not None:
+            return self._event_topic_builder(event)
+
+        return "{}/event/{}/{}".format(
+            self.servient_id,
+            event.thing.url_name,
+            event.url_name)
 
     def build_forms(self, hostname, interaction):
         """Builds and returns a list with all Forms that are

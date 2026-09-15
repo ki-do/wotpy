@@ -498,7 +498,11 @@ class ZenohClient(BaseProtocolClient):
             state = {}
 
             async def deliver_message(sample, observer):
-                msg_data = json.loads(sample.payload.to_string())
+                raw_payload = sample.payload.to_string()
+                try:
+                    msg_data = json.loads(raw_payload)
+                except (json.JSONDecodeError, TypeError):
+                    msg_data = raw_payload
                 try:
                     next_item = next_item_builder(msg_data)
                     observer.on_next(next_item)
@@ -593,7 +597,8 @@ class ZenohClient(BaseProtocolClient):
         topic = parsed_href["topic"]
 
         def next_item_builder(msg_data):
-            return EmittedEvent(init=msg_data.get("data"), name=name)
+            event_data = msg_data.get("data") if isinstance(msg_data, dict) and "data" in msg_data else msg_data
+            return EmittedEvent(init=event_data, name=name)
 
         subscribe = self._build_subscribe(
             router_url=router_url,
