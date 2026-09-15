@@ -70,10 +70,31 @@ def _strip_binding_terms(interaction):
     return clean
 
 
-def build_property_read_proxy(consumed_thing, name):
+def _decode_modbus_property_value(raw_value, source_property):
+    forms = source_property.get("forms", []) if isinstance(source_property, dict) else []
+    form = next((item for item in forms if "readproperty" in item.get("op", [])), None)
+    if form is None:
+        form = forms[0] if forms else {}
+
+    wire_type = str(form.get("modbus:type", form.get("modv:dataType", ""))).lower()
+    if wire_type not in ("float", "float32"):
+        return raw_value
+
+    if isinstance(raw_value, list) and len(raw_value) == 2 and all(isinstance(item, int) for item in raw_value):
+        try:
+            binary = raw_value[0].to_bytes(2, "big") + raw_value[1].to_bytes(2, "big")
+            return round(struct.unpack(">f", binary)[0], 6)
+        except (OverflowError, ValueError, struct.error):
+            pass
+
+    return raw_value
+
+
+def build_property_read_proxy(consumed_thing, name, source_property=None):
     async def _proxy():
         awaitable = consumed_thing.properties[name].read(timeout=TIMEOUT_PROP_READ)
-        return await asyncio.wait_for(awaitable, timeout=TIMEOUT_PROP_READ * TIMEOUT_HARD_FACTOR)
+        raw_value = await asyncio.wait_for(awaitable, timeout=TIMEOUT_PROP_READ * TIMEOUT_HARD_FACTOR)
+        return _decode_modbus_property_value(raw_value, source_property)
 
     return _proxy
 
@@ -162,7 +183,10 @@ async def expose_proxy(wot, consumed_thing, source_td, thing_id, thing_title, ma
     exposed_thing = wot.produce(json.dumps(proxy_td))
 
     for name in property_names:
-        exposed_thing.set_property_read_handler(name, build_property_read_proxy(consumed_thing, name))
+        exposed_thing.set_property_read_handler(
+            name,
+            build_property_read_proxy(consumed_thing, name, source_td.get("properties", {}).get(name)),
+        )
         exposed_thing.set_property_write_handler(name, build_property_write_proxy(consumed_thing, name))
 
     for name in consumed_thing.td.events:

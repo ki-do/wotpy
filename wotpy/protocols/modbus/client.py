@@ -52,13 +52,49 @@ class ModbusClient(BaseProtocolClient):
             except TypeError:
                 return False
 
-        try:
-            return next(
-                form.href for form in forms
-                if is_scheme_form(form, td.base, ModbusSchemes.MODBUS_TCP) and is_op_form(form)
-            )
-        except StopIteration:
+        for form in forms:
+            resolved_href = cls._resolve_modbus_href(td.base, form.href)
+            if resolved_href is None or not is_op_form(form):
+                continue
+
+            return resolved_href
+
+        return None
+
+    @staticmethod
+    def _resolve_modbus_href(base, href):
+        """Resolves a Modbus form, treating the base path as a unit-ID prefix."""
+
+        parsed_href = urllib.parse.urlparse(href)
+        if parsed_href.scheme:
+            return href if parsed_href.scheme == ModbusSchemes.MODBUS_TCP else None
+
+        parsed_base = urllib.parse.urlparse(base or "")
+        if parsed_base.scheme != ModbusSchemes.MODBUS_TCP or not parsed_base.netloc:
             return None
+
+        path_parts = [part for part in (parsed_base.path, parsed_href.path) if part]
+        path = "/" + "/".join(part.strip("/") for part in path_parts)
+
+        return urllib.parse.urlunparse((
+            parsed_base.scheme,
+            parsed_base.netloc,
+            path,
+            "",
+            parsed_href.query,
+            parsed_href.fragment,
+        ))
+
+    @classmethod
+    def _find_modbus_form(cls, td, forms, resolved_href):
+        """Returns the source form matching a resolved Modbus href."""
+
+        form = next(
+            form for form in forms
+            if cls._resolve_modbus_href(td.base, form.href) == resolved_href)
+        form_dict = getattr(form, "form_dict", form)
+        form_dict._init["href"] = resolved_href
+        return form
 
     @staticmethod
     def _parse_href(href):
@@ -100,6 +136,8 @@ class ModbusClient(BaseProtocolClient):
         form_dict_obj = getattr(form, "form_dict", None)
         if form_dict_obj is not None:
             raw = getattr(form_dict_obj, "_init", {}) or {}
+        elif hasattr(form, "_init"):
+            raw = form._init or {}
         elif hasattr(form, "to_dict"):
             raw = form.to_dict() or {}
 
@@ -127,7 +165,12 @@ class ModbusClient(BaseProtocolClient):
             entity = ModbusEntity.HOLDING_REGISTER
 
         if quantity is None:
-            if isinstance(input_value, (list, tuple)):
+            data_type = str(self._form_raw_value(form, "modv:dataType", "")).lower()
+            if data_type in ("float32", "uint32", "int32"):
+                quantity = 2
+            elif data_type in ("float64", "uint64", "int64"):
+                quantity = 4
+            elif isinstance(input_value, (list, tuple)):
                 quantity = len(input_value)
             else:
                 quantity = 1
@@ -227,12 +270,13 @@ class ModbusClient(BaseProtocolClient):
     async def invoke_action(self, td, name, input_value, timeout=None):
         """Invokes an action by writing to the configured Modbus resource."""
 
-        form_href = self._pick_modbus_href(td, td.get_action_forms(name), op=InteractionVerbs.INVOKE_ACTION)
+        forms = td.get_action_forms(name)
+        form_href = self._pick_modbus_href(td, forms, op=InteractionVerbs.INVOKE_ACTION)
 
         if form_href is None:
             raise FormNotFoundException()
 
-        form = next(form for form in td.get_action_forms(name) if form.href == form_href)
+        form = self._find_modbus_form(td, forms, form_href)
 
         config = self._build_op_config(form, input_value=input_value)
         connection = await self._get_connection(config["host"], config["port"], config["timeout_ms"])
@@ -252,15 +296,16 @@ class ModbusClient(BaseProtocolClient):
     async def write_property(self, td, name, value, timeout=None):
         """Writes a property value to the configured Modbus resource."""
 
-        form_href = self._pick_modbus_href(td, td.get_property_forms(name), op=InteractionVerbs.WRITE_PROPERTY)
+        forms = td.get_property_forms(name)
+        form_href = self._pick_modbus_href(td, forms, op=InteractionVerbs.WRITE_PROPERTY)
 
         if form_href is None:
-            form_href = self._pick_modbus_href(td, td.get_property_forms(name))
+            form_href = self._pick_modbus_href(td, forms)
 
         if form_href is None:
             raise FormNotFoundException()
 
-        form = next(form for form in td.get_property_forms(name) if form.href == form_href)
+        form = self._find_modbus_form(td, forms, form_href)
 
         config = self._build_op_config(form, input_value=value, is_write=True)
         connection = await self._get_connection(config["host"], config["port"], config["timeout_ms"])
@@ -278,15 +323,16 @@ class ModbusClient(BaseProtocolClient):
     async def read_property(self, td, name, timeout=None):
         """Reads a property value from the configured Modbus resource."""
 
-        form_href = self._pick_modbus_href(td, td.get_property_forms(name), op=InteractionVerbs.READ_PROPERTY)
+        forms = td.get_property_forms(name)
+        form_href = self._pick_modbus_href(td, forms, op=InteractionVerbs.READ_PROPERTY)
 
         if form_href is None:
-            form_href = self._pick_modbus_href(td, td.get_property_forms(name))
+            form_href = self._pick_modbus_href(td, forms)
 
         if form_href is None:
             raise FormNotFoundException()
 
-        form = next(form for form in td.get_property_forms(name) if form.href == form_href)
+        form = self._find_modbus_form(td, forms, form_href)
 
         config = self._build_op_config(form, input_value=None)
         connection = await self._get_connection(config["host"], config["port"], config["timeout_ms"])
@@ -315,7 +361,7 @@ class ModbusClient(BaseProtocolClient):
         if form_href is None:
             raise FormNotFoundException()
 
-        form = next(form for form in forms if form.href == form_href)
+        form = self._find_modbus_form(td, forms, form_href)
         config = self._build_op_config(form, input_value=None)
 
         def subscribe(observer, scheduler):
@@ -365,7 +411,7 @@ class ModbusClient(BaseProtocolClient):
         if form_href is None:
             raise FormNotFoundException()
 
-        form = next(form for form in forms if form.href == form_href)
+        form = self._find_modbus_form(td, forms, form_href)
         config = self._build_op_config(form, input_value=None)
 
         def subscribe(observer, scheduler):
