@@ -4,16 +4,16 @@
 <meta charset="utf-8">
 <title>Zenoh IoT Onboarding Dashboard</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem; background: #f4f5f7; }
+  :root { color-scheme: light; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem; background: #f4f5f7; color: #1f2937; }
   h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
   .subtitle { color: #666; margin-top: 0; margin-bottom: 1.5rem; font-size: 0.9rem; }
 
   .onboard-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
     background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
   .onboard-form input[type=file] { flex: 1 1 240px; }
-  select, input[type=text], input[type=file] { padding: 0.35rem 0.5rem; border: 1px solid #ccc; border-radius: 6px; }
-  button { cursor: pointer; border: 1px solid #888; border-radius: 6px; background: #fff; padding: 0.35rem 0.7rem; font-size: 0.85rem; }
+  select, input[type=text], input[type=file] { color: #1f2937; background: #fff; padding: 0.35rem 0.5rem; border: 1px solid #ccc; border-radius: 6px; }
+  button { color: #1f2937; cursor: pointer; border: 1px solid #888; border-radius: 6px; background: #fff; padding: 0.35rem 0.7rem; font-size: 0.85rem; }
   button:hover { background: #eee; }
   button.danger { border-color: #c0392b; color: #c0392b; }
   button.danger:hover { background: #fdecea; }
@@ -29,11 +29,11 @@
   .section-title { font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: #555; margin: 0.9rem 0 0.35rem 0; }
   .interaction-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0; flex-wrap: wrap; }
   .interaction-name { font-family: ui-monospace, monospace; font-size: 0.82rem; min-width: 140px; }
-  .value-box { font-family: ui-monospace, monospace; font-size: 0.78rem; background: #f0f0f0; border-radius: 4px; padding: 0.15rem 0.4rem; max-width: 220px; overflow-wrap: anywhere; }
+  .value-box { color: #111827; font-family: ui-monospace, monospace; font-size: 0.78rem; background: #f0f0f0; border-radius: 4px; padding: 0.15rem 0.4rem; max-width: 220px; overflow-wrap: anywhere; }
   .value-box.error { background: #fdecea; color: #c0392b; }
   input.value-input { width: 120px; }
 
-  .event-log { list-style: none; margin: 0.35rem 0 0 0; padding: 0; max-height: 120px; overflow-y: auto;
+  .event-log { color: #1f2937; list-style: none; margin: 0.35rem 0 0 0; padding: 0; max-height: 120px; overflow-y: auto;
     background: #f8f8f8; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.75rem; }
   .event-log li { padding: 0.15rem 0.4rem; border-bottom: 1px solid #eee; }
   .empty { color: #999; font-size: 0.8rem; }
@@ -51,6 +51,7 @@
     <option value="zenoh">zenoh (direct)</option>
     <option value="modbus">modbus</option>
     <option value="mqtt">mqtt</option>
+    <option value="lorawan">lorawan</option>
   </select>
   <button class="primary" id="onboardBtn">Onboard device</button>
   <span id="onboardStatus"></span>

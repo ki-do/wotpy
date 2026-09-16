@@ -43,6 +43,7 @@ TIMEOUT_ACTION_HARD_FACTOR = 1.2
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 APP = None
+LORAWAN_APPLICATION_ID = "d209ff97-929d-46f8-9180-ea2f6c382e90"
 
 
 def build_action_invoke_proxy(consumed_thing, name):
@@ -86,20 +87,67 @@ def build_dashboard_proxy_td(source_td, thing_id, thing_title, property_names, a
     }
 
 
+def build_lorawan_zenoh_td(source_td, thing_id, thing_title, router_url, application_id):
+    """Build a Zenoh TD for events already decoded by the LoRaWAN bridge."""
+
+    application_id = LORAWAN_APPLICATION_ID
+    dev_eui = source_td.get("lorav:devEUI")
+    if not dev_eui:
+        raise ValueError("LoRaWAN TD is missing lorav:devEUI")
+
+    router_endpoint = router_url
+    if router_endpoint.startswith("tcp/"):
+        router_endpoint = "zenoh+tcp://" + router_endpoint[4:]
+    elif not router_endpoint.startswith("zenoh+"):
+        router_endpoint = "zenoh+tcp://" + router_endpoint
+
+    events = {}
+    for name, source_event in source_td.get("events", {}).items():
+        event = {
+            key: value for key, value in source_event.items()
+            if key != "forms" and not key.startswith("lorav:")
+        }
+        event["forms"] = [{
+            "href": "{}/application/{}/device/{}/event/up/{}".format(
+                router_endpoint.rstrip("/"), application_id, dev_eui, name),
+            "contentType": "application/json",
+            "op": "subscribeevent",
+        }]
+        events[name] = event
+
+    return {
+        "@context": [
+            "https://www.w3.org/2019/wot/td/v1",
+            "https://www.w3.org/2022/wot/td/v1.1",
+        ],
+        "id": thing_id,
+        "title": thing_title,
+        "description": "Zenoh proxy for the source Thing '{}'".format(source_td.get("title", "")),
+        "securityDefinitions": {"nosec_sc": {"scheme": "nosec"}},
+        "security": "nosec_sc",
+        "properties": {},
+        "actions": {},
+        "events": events,
+    }
+
+
 class DashboardApp:
     """Owns the two servients (source-side proxy, Zenoh-side consumer) and the
     in-memory registry of onboarded devices."""
 
-    def __init__(self, router_url, servient_id):
+    def __init__(self, router_url, servient_id, lorawan_app_id=None):
         self._router_url = router_url
         self._servient_id = servient_id
+        self._lorawan_app_id = lorawan_app_id
         self.proxy_wot = None
         self.consumer_wot = None
         self.devices = {}
+        self._proxy_server = None
 
     async def start(self):
         proxy_servient = Servient(catalogue_port=None, clients=[ModbusClient(), MQTTClient()])
-        proxy_servient.add_server(ZenohServer(router_url=self._router_url, servient_id=self._servient_id))
+        self._proxy_server = ZenohServer(router_url=self._router_url, servient_id=self._servient_id)
+        proxy_servient.add_server(self._proxy_server)
         self.proxy_wot = await proxy_servient.start()
 
         consumer_servient = Servient(catalogue_port=None, clients=[ZenohClient()])
@@ -142,6 +190,19 @@ class DashboardApp:
             property_names = list(device_consumed_thing.td.properties.keys())
             action_names = list(device_consumed_thing.td.actions.keys())
             event_names = list(device_consumed_thing.td.events.keys())
+        elif binding == "lorawan":
+            property_names = []
+            action_names = []
+            event_names = list(source_td.get("events", {}).keys())
+            exposed_thing = None
+            exposed_td_dict = build_lorawan_zenoh_td(
+                source_td,
+                device_id,
+                device_title,
+                self._router_url,
+                self._lorawan_app_id,
+            )
+            device_consumed_thing = self.consumer_wot.consume(json.dumps(exposed_td_dict))
         else:
             consumed_thing = self.proxy_wot.consume(json.dumps(source_td))
 
@@ -374,10 +435,14 @@ def make_application():
     ])
 
 
-async def main(router_url, port, servient_id):
+async def main(router_url, port, servient_id, lorawan_app_id=None):
     global APP
 
-    APP = DashboardApp(router_url=router_url, servient_id=servient_id)
+    APP = DashboardApp(
+        router_url=router_url,
+        servient_id=servient_id,
+        lorawan_app_id=lorawan_app_id,
+    )
     await APP.start()
 
     make_application().listen(port)
@@ -391,9 +456,10 @@ if __name__ == "__main__":
     parser.add_argument("--router", default="tcp/localhost:7447", help="Zenoh router URL")
     parser.add_argument("--port", type=int, default=8899, help="Dashboard HTTP port")
     parser.add_argument("--servient-id", default="dashboard-proxy", help="Zenoh servient/topic namespace for onboarded devices")
+    parser.add_argument("--lorawan-app-id", default=os.environ.get("LORAWAN_APP_ID"), help="ChirpStack application ID for LoRaWAN TDs (or set LORAWAN_APP_ID)")
     args = parser.parse_args()
 
-    IOLoop.current().add_callback(main, args.router, args.port, args.servient_id)
+    IOLoop.current().add_callback(main, args.router, args.port, args.servient_id, args.lorawan_app_id)
 
     try:
         IOLoop.current().start()

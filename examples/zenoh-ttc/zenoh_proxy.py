@@ -10,6 +10,7 @@ Usage:
 import argparse
 import asyncio
 import base64
+import copy
 import json
 import logging
 import os
@@ -59,15 +60,19 @@ LORAWAN_WIRE_TYPES = {
 }
 
 
-def _strip_binding_terms(interaction):
-    clean = {
-        key: value for key, value in interaction.items()
-        if key != "forms" and not key.startswith(("modv:", "modbus:", "mqtt:"))
-    }
+def _replace_forms(interactions):
+    for interaction in interactions.values():
+        interaction["forms"] = []
 
-    clean.setdefault("observable", True)
 
-    return clean
+def _merge_generated_forms(proxy_td, generated_td):
+    result = copy.deepcopy(proxy_td)
+    for interaction_type in ("properties", "actions", "events"):
+        generated_interactions = generated_td.get(interaction_type, {})
+        for name, interaction in result.get(interaction_type, {}).items():
+            if name in generated_interactions:
+                interaction["forms"] = generated_interactions[name].get("forms", [])
+    return result
 
 
 def _decode_modbus_property_value(raw_value, source_property):
@@ -132,26 +137,19 @@ def subscribe_event_proxy(consumed_thing, exposed_thing, name):
 
 
 def build_proxy_td(source_td, thing_id, thing_title, property_names):
-    source_properties = source_td.get("properties", {})
-    source_events = source_td.get("events", {})
-
-    return {
-        "@context": [
-            "https://www.w3.org/2019/wot/td/v1",
-            "https://www.w3.org/2022/wot/td/v1.1",
-        ],
-        "id": thing_id,
-        "title": thing_title,
-        "description": "Zenoh proxy for the source Thing '{}'".format(source_td.get("title", "")),
-        "securityDefinitions": {"nosec_sc": {"scheme": "nosec"}},
-        "security": "nosec_sc",
-        "properties": {
-            name: _strip_binding_terms(source_properties[name]) for name in property_names
-        },
-        "events": {
-            name: _strip_binding_terms(source_events[name]) for name in source_events
-        },
+    proxy_td = copy.deepcopy(source_td)
+    proxy_td["properties"] = {
+        name: proxy_td.get("properties", {})[name] for name in property_names
     }
+    _replace_forms(proxy_td["properties"])
+    _replace_forms(proxy_td.get("events", {}))
+
+    if thing_id is not None:
+        proxy_td["id"] = thing_id
+    if thing_title is not None:
+        proxy_td["title"] = thing_title
+
+    return proxy_td
 
 
 def preview_proxy_td(source_td, thing_id, thing_title, max_properties, router_url, event_topic_prefix=None):
@@ -173,7 +171,8 @@ def preview_proxy_td(source_td, thing_id, thing_title, max_properties, router_ur
         for form in zenoh_server.build_forms(hostname=None, interaction=interaction):
             interaction.add_form(form)
 
-    return ThingDescription.from_thing(thing).to_dict()
+    generated_td = ThingDescription.from_thing(thing).to_dict()
+    return _merge_generated_forms(proxy_td, generated_td)
 
 
 async def expose_proxy(wot, consumed_thing, source_td, thing_id, thing_title, max_properties):
@@ -317,6 +316,12 @@ def _load_source(source_td_path, source_binding):
 
 
 def _proxy_identity(source_td, thing_id, thing_title, is_only_source):
+    if thing_id is not None or thing_title is not None:
+        return thing_id or source_td.get("id"), thing_title or source_td.get("title")
+
+    if source_td.get("id") or source_td.get("title"):
+        return source_td.get("id"), source_td.get("title")
+
     if is_only_source:
         return thing_id, thing_title
 
@@ -374,6 +379,7 @@ async def main(source_td_paths, source_bindings, router_url, max_properties, thi
         LOGGER.info("Consuming source Thing using the %s binding", source_binding)
 
         proxy_thing_id, proxy_thing_title = _proxy_identity(source_td, thing_id, thing_title, is_only_source)
+        property_names = list(source_td.get("properties", {}).keys())[:max_properties]
 
         if source_binding == "lorawan":
             proxy_td = build_proxy_td(source_td, proxy_thing_id, proxy_thing_title, [])
@@ -391,7 +397,10 @@ async def main(source_td_paths, source_bindings, router_url, max_properties, thi
                 thing_title=proxy_thing_title,
                 max_properties=max_properties)
 
-        exposed_td = ThingDescription.from_thing(exposed_thing.thing).to_dict()
+        exposed_td = _merge_generated_forms(
+            build_proxy_td(source_td, proxy_thing_id, proxy_thing_title, property_names),
+            ThingDescription.from_thing(exposed_thing.thing).to_dict(),
+        )
         print(json.dumps(exposed_td, indent=2))
 
     LOGGER.info("Zenoh proxy for %d source(s) exposed on router %s", len(sources), router_url)
@@ -406,8 +415,8 @@ if __name__ == "__main__":
     parser.add_argument("--source-binding", action="append", choices=["auto", "modbus", "mqtt", "lorawan"], default=[], help="Source protocol binding per --source-td, same order (default: infer from TD forms)")
     parser.add_argument("--router", default="tcp/localhost:7447", help="Zenoh router URL")
     parser.add_argument("--max-properties", type=int, default=15, help="Maximum number of properties to proxy")
-    parser.add_argument("--thing-id", default="urn:modbus:zenoh:proxy", help="ID of the exposed Zenoh Thing (only used with a single --source-td)")
-    parser.add_argument("--thing-title", default="ModbusZenohProxy", help="Title of the exposed Zenoh Thing (only used with a single --source-td)")
+    parser.add_argument("--thing-id", default=None, help="Override the ID of the exposed Zenoh Thing")
+    parser.add_argument("--thing-title", default=None, help="Override the title of the exposed Zenoh Thing")
     parser.add_argument("--catalogue-port", type=int, default=9292, help="TD catalogue port (0 to disable)")
     parser.add_argument("--servient-id", default=None, help="Zenoh servient/topic namespace (default: 'wotpy'). Set this to avoid colliding with other proxy instances sharing the same router.")
     parser.add_argument("--lorawan-app-id", default=os.environ.get("LORAWAN_APP_ID"), help="ChirpStack application ID for LoRaWAN TDs (or set LORAWAN_APP_ID)")
