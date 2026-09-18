@@ -60,6 +60,15 @@ LORAWAN_WIRE_TYPES = {
 }
 
 
+def _strip_binding_terms(interaction):
+    clean = {
+        key: value for key, value in interaction.items()
+        if key != "forms" and not key.startswith(("modv:", "modbus:", "mqtt:"))
+    }
+    clean.setdefault("observable", True)
+    return clean
+
+
 def _replace_forms(interactions):
     for interaction in interactions.values():
         interaction["forms"] = []
